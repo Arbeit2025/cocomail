@@ -210,6 +210,38 @@ class CocomailTests(unittest.TestCase):
         conn.close()
         self.assertEqual(count, 1)
 
+    def _outbox_rows(self):
+        conn = cocomail.get_db()
+        rows = [dict(r) for r in conn.execute("SELECT * FROM outbox ORDER BY id").fetchall()]
+        conn.close()
+        return rows
+
+    def test_delete_outbox_entry(self):
+        s = self.make_schedule()
+        self.client.post(f"/schedules/{s['id']}/send-now")
+        self.client.post(f"/schedules/{s['id']}/send-now")
+        rows = self._outbox_rows()
+        self.assertEqual(len(rows), 2)
+        resp = self.client.post(f"/outbox/{rows[0]['id']}/delete")
+        self.assertEqual(resp.status_code, 302)
+        rows = self._outbox_rows()
+        self.assertEqual(len(rows), 1)
+        # スケジュール自体は残る
+        self.assertIsNotNone(cocomail.fetch_schedule(s["id"]))
+
+    def test_clear_outbox(self):
+        s = self.make_schedule()
+        self.client.post(f"/schedules/{s['id']}/send-now")
+        self.client.post(f"/schedules/{s['id']}/send-now")
+        self.assertEqual(len(self._outbox_rows()), 2)
+        resp = self.client.post("/outbox/clear")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(self._outbox_rows(), [])
+
+    def test_delete_missing_outbox_entry_is_ok(self):
+        resp = self.client.post("/outbox/999/delete")
+        self.assertEqual(resp.status_code, 302)
+
     def test_presets_have_subject_and_body(self):
         self.assertGreaterEqual(len(cocomail.PRESETS), 3)
         for preset in cocomail.PRESETS.values():

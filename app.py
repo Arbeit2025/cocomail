@@ -276,9 +276,10 @@ table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #eee;pad
 <input type="submit" value="作成する">
 </form></div>
 <h2>送信履歴</h2>
-<table><tr><th>日時</th><th>宛先</th><th>件名</th><th>状態</th><th>詳細</th></tr>
-{% for o in outbox %}<tr><td>{{ o.sent_at }}</td><td>{{ o.recipient }}</td><td>{{ o.subject }}</td><td>{{ o.status }}</td><td>{{ o.detail or '' }}</td></tr>
-{% else %}<tr><td colspan="5">まだ履歴がありません</td></tr>{% endfor %}</table>
+{% if outbox %}<form method="post" action="{{ url_for('clear_outbox') }}" onsubmit="return confirm('送信履歴をすべて削除しますか？')"><button type="submit">履歴をすべて削除</button></form>{% endif %}
+<table><tr><th>日時</th><th>宛先</th><th>件名</th><th>状態</th><th>詳細</th><th>操作</th></tr>
+{% for o in outbox %}<tr><td>{{ o.sent_at }}</td><td>{{ o.recipient }}</td><td>{{ o.subject }}</td><td>{{ o.status }}</td><td>{{ o.detail or '' }}</td><td><form class="inline" method="post" action="{{ url_for('delete_outbox', outbox_id=o.id) }}" onsubmit="return confirm('この履歴を削除しますか？')"><button type="submit">削除</button></form></td></tr>
+{% else %}<tr><td colspan="6">まだ履歴がありません</td></tr>{% endfor %}</table>
 <script>
 const presets = {{ presets_json|safe }};
 document.getElementById('preset').addEventListener('change', (e) => {
@@ -438,6 +439,24 @@ def send_now(schedule_id):
     if schedule is None:
         abort(404)
     deliver(schedule, now_jst().date())
+    return redirect(url_for("index"))
+
+
+@app.post("/outbox/<int:outbox_id>/delete")
+def delete_outbox(outbox_id):
+    conn = get_db()
+    conn.execute("DELETE FROM outbox WHERE id = ?", (outbox_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("index"))
+
+
+@app.post("/outbox/clear")
+def clear_outbox():
+    conn = get_db()
+    conn.execute("DELETE FROM outbox")
+    conn.commit()
+    conn.close()
     return redirect(url_for("index"))
 
 
